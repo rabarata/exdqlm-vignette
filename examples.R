@@ -11,37 +11,32 @@ model
 #
 M95 = exdqlmMCMC(y = LakeHuron, p0 = 0.95, model = model,
                                      df = 0.9, dim.df = 2,
-                                     fix.sigma = TRUE, sig.init = 0.07,
                                      PriorGamma = list(m_gam = -1, s_gam = 0.1, df_gam = 1),
                                      n.burn = 700, n.mcmc = 300, verbose = FALSE)
 M50 = exdqlmMCMC(y = LakeHuron, p0 = 0.50, model = model,
                                       df = 0.9, dim.df = 2,
-                                      fix.sigma = TRUE, sig.init = 0.4,
                                       PriorGamma = list(m_gam = 0, s_gam = 0.1, df_gam = 1),
                                       n.burn = 700, n.mcmc = 300, verbose = FALSE)
 M5 = exdqlmMCMC(y = LakeHuron, p0 = 0.05, model = model,
                                     df = 0.9, dim.df = 2,
-                                    fix.sigma = TRUE, sig.init = 0.07,
                                     PriorGamma = list(m_gam = 1, s_gam = 0.1, df_gam = 1),
                                     n.burn = 700, n.mcmc = 300, verbose = TRUE)
 #
 # figure 1 (ex1mcmc.png)
 par(mfcol=c(1,2))
-library(coda)
-traceplot(M50$samp.gamma, main = "")
-densplot(M50$samp.gamma, main = "")
+coda::traceplot(M50$samp.gamma, main = "")
+coda::densplot(M50$samp.gamma, main = "")
 #
 M50 = exdqlmMCMC(y = LakeHuron, p0 = 0.50, model = model,
                                       df = 0.9, dim.df = 2,
-                                      fix.sigma = TRUE, sig.init = 0.4,
                                       gam.init = 0, fix.gamma = TRUE,
                                       n.burn = 700, n.mcmc = 300)
 #
 # figure 2 (ex1quants.png)
 par(mfcol=c(1,2)) # not shown in article code chunk
-exdqlmPlot(y = LakeHuron, M95)
-exdqlmPlot(y = LakeHuron, M50, add = TRUE, col = "blue")
-exdqlmPlot(y = LakeHuron, M5, add = TRUE, col = "forest green")
+plot(M95)
+exdqlmPlot(M50, add = TRUE, col = "blue")
+exdqlmPlot(M5, add = TRUE, col = "forest green")
 legend("topright", lty = 1, col = c("purple","blue","forest green"),
                   legend = c(expression('p'[0]*'=0.95'),expression('p'[0]*'=0.50'),
                                                  expression('p'[0]*'=0.05')))
@@ -51,12 +46,12 @@ fGG =  model$GG
 #
 plot(LakeHuron,  xlim = c(1952,1980), ylim = c(575,581),
                    col = "dark grey")
-exdqlmForecast(y = LakeHuron, start.t = length(LakeHuron), k = 8, M95,
+exdqlmForecast(start.t = length(LakeHuron), k = 8, M95,
                                  fFF = fFF, fGG = fGG, plot = TRUE, add = TRUE)
-exdqlmForecast(y = LakeHuron, start.t = length(LakeHuron), k = 8, M50,
+exdqlmForecast(start.t = length(LakeHuron), k = 8, M50,
                                  fFF = fFF, fGG = fGG, plot = TRUE, add = TRUE,
                                  cols = c("blue","light blue"))
-exdqlmForecast(y = LakeHuron, start.t = length(LakeHuron), k = 8, M5,
+exdqlmForecast(start.t = length(LakeHuron), k = 8, M5,
                                  fFF = fFF, fGG = fGG, plot = TRUE, add = TRUE,
                                  cols = c("forest green","green"))
 
@@ -64,44 +59,42 @@ exdqlmForecast(y = LakeHuron, start.t = length(LakeHuron), k = 8, M5,
 ##### example 2 #####
 #####################
 #
-library(dlm)
-dlm.trend.comp = dlmModPoly(1, m0 = mean(sunspot.year), C0 = 10)
+dlm.trend.comp = dlm::dlmModPoly(1, m0 = mean(sunspot.year), C0 = 10)
+trend.comp = as.exdqlm(dlm.trend.comp)
 #
 seas.comp = seasMod(p = 11, h = 1:4, C0 = 10*diag(8))
 #
-model = combineMods(dlm.trend.comp,seas.comp)
+model = trend.comp + seas.comp
 #
-trend.comp = dlmMod(dlm.trend.comp)
-model = combineMods(trend.comp,seas.comp)
 model$GG
 #
-M1 = exdqlmISVB(y = sunspot.year, p0 = 0.85, model = model,
+M1 = exdqlmLDVB(y = sunspot.year, p0 = 0.85, model = model,
                                      df = c(0.9,0.85), dim.df = c(1,8),
                                      dqlm.ind = TRUE, fix.sigma = FALSE)
 #
 summary(M1$samp.sigma)
 #
-M1 = exdqlmISVB(y = sunspot.year, p0 = 0.85, model = model,
+M1 = exdqlmLDVB(y = sunspot.year, p0 = 0.95, model = model,
                                      df = c(0.9,0.85), dim.df = c(1,8),
-                                     dqlm.ind = TRUE, sig.init = 2,
+                                     dqlm.ind = TRUE, fix.sigma = FALSE,
                                      verbose = FALSE)
-M2 = exdqlmISVB(y = sunspot.year, p0 = 0.85, model = model,
+M2 = exdqlmLDVB(y = sunspot.year, p0 = 0.95, model = model,
                                      df = c(0.9,0.85), dim.df = c(1,8),
-                                     sig.init = 2, verbose = FALSE)
+                                     fix.sigma = FALSE, 
+                                     verbose = FALSE)
 #
 # figure 3 (ex2quant.png)
 par(mfcol=c(1,3)) # not shown in article code chunk
 plot(sunspot.year, col = "dark grey") # not shown in article code chunk
 plot(sunspot.year, xlim = c(1750,1850), col = "dark grey",
                ylab = "quantile 95% CrIs")
-exdqlmPlot(y = sunspot.year, M1, add = TRUE, col = "red")
-exdqlmPlot(y = sunspot.year, M2, add = TRUE, col = "blue")
-#
+exdqlmPlot(M1, add = TRUE, col = "red")
+exdqlmPlot(M2, add = TRUE, col = "blue")
 hist(M2$samp.gamma,xlab=expression(gamma),main="")
 #
 # figure 4 (ex2checks.png)
 par(mfrow=c(2,3)) # not shown in article code chunk
-exdqlmChecks(y = sunspot.year, M1, M2, cols = c("red","blue"))
+exdqlmDiagnostics(M1, M2, cols = c("red","blue"))
 #
 possible.dfs = cbind(0.9,seq(0.85,1,0.05))
 possible.dfs
@@ -131,7 +124,7 @@ plot(nino34, col="dark grey",cex.lab=1.5,cex.axis=1.5,cex.main=1.8) # not shown 
 #
 trend.comp = polytrendMod(1,m0=3,C0=0.1)
 seas.comp = seasMod(p = 12, h = 1, C0 = diag(1,2))
-model = combineMods(trend.comp,seas.comp)
+model = trend.comp + seas.comp
 model
 #
 reg.comp <- NULL
@@ -140,7 +133,7 @@ reg.comp$C0 = 1
 reg.comp$FF = matrix(nino34,nrow = 1)
 reg.comp$GG = 1
 #
-model.w.reg = combineMods(model,reg.comp)
+model.w.reg = model + reg.comp
 #
 possible.lams = seq(0.5,0.85,0.025)
 KLs <- vector("numeric")
