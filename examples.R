@@ -12,29 +12,37 @@ model
 M95 = exdqlmMCMC(y = LakeHuron, p0 = 0.95, model = model,
                                      df = 0.9, dim.df = 2,
                                      PriorGamma = list(m_gam = -1, s_gam = 0.1, df_gam = 1),
-                                     n.burn = 700, n.mcmc = 300, verbose = FALSE)
+                                     n.burn = 2000, n.mcmc = 3000, verbose = FALSE)
 M50 = exdqlmMCMC(y = LakeHuron, p0 = 0.50, model = model,
                                       df = 0.9, dim.df = 2,
                                       PriorGamma = list(m_gam = 0, s_gam = 0.1, df_gam = 1),
-                                      n.burn = 700, n.mcmc = 300, verbose = FALSE)
+                                      n.burn = 2000, n.mcmc = 3000, verbose = FALSE)
 M5 = exdqlmMCMC(y = LakeHuron, p0 = 0.05, model = model,
                                     df = 0.9, dim.df = 2,
                                     PriorGamma = list(m_gam = 1, s_gam = 0.1, df_gam = 1),
-                                    n.burn = 700, n.mcmc = 300, verbose = TRUE)
+                                    n.burn = 2000, n.mcmc = 3000, verbose = TRUE, verbose.every = 1000)
 #
 # figure 1 (ex1mcmc.png)
-par(mfcol=c(1,2))
-coda::traceplot(M50$samp.gamma, main = "")
-coda::densplot(M50$samp.gamma, main = "")
+par(mfcol=c(2,2))
+par(mar = c(5.1, 4.1, 1, 1))
+keep.idx = seq(1, length(M50$samp.sigma), by = 10)
+sigma.trace = coda::mcmc(M50$samp.sigma[keep.idx], thin = 10)
+gamma.trace = coda::mcmc(M50$samp.gamma[keep.idx], thin = 10)
+coda::traceplot(sigma.trace, main = expression(sigma), ylab="trace")
+coda::densplot(sigma.trace, main = "", ylab = "density")
+coda::traceplot(gamma.trace, main = expression(gamma))
+coda::densplot(gamma.trace, main = "")
+
 #
 M50 = exdqlmMCMC(y = LakeHuron, p0 = 0.50, model = model,
                                       df = 0.9, dim.df = 2,
                                       gam.init = 0, fix.gamma = TRUE,
-                                      n.burn = 700, n.mcmc = 300)
+                                      n.burn = 2000, n.mcmc = 3000)
 #
 # figure 2 (ex1quants.png)
-par(mfcol=c(1,2)) # not shown in article code chunk
-plot(M95)
+par(mfcol=c(1,2)) 
+par(mar = c(5.1, 4.1, 2.1, 1))
+plot(M95); title("Dynamic quantiles")
 exdqlmPlot(M50, add = TRUE, col = "blue")
 exdqlmPlot(M5, add = TRUE, col = "forest green")
 legend("topright", lty = 1, col = c("purple","blue","forest green"),
@@ -44,8 +52,9 @@ legend("topright", lty = 1, col = c("purple","blue","forest green"),
 fFF = model$FF
 fGG =  model$GG
 #
-plot(LakeHuron,  xlim = c(1952,1980), ylim = c(575,581),
-                   col = "dark grey")
+plot(LakeHuron,  xlim = c(1952,1980), ylim = c(575.5,581.5),
+                   col = "dark grey", main = "Forecasted quantiles",
+                    ylab = "forecast 95% CrIs")
 exdqlmForecast(start.t = length(LakeHuron), k = 8, M95,
                                  fFF = fFF, fGG = fGG, plot = TRUE, add = TRUE)
 exdqlmForecast(start.t = length(LakeHuron), k = 8, M50,
@@ -54,6 +63,21 @@ exdqlmForecast(start.t = length(LakeHuron), k = 8, M50,
 exdqlmForecast(start.t = length(LakeHuron), k = 8, M5,
                                  fFF = fFF, fGG = fGG, plot = TRUE, add = TRUE,
                                  cols = c("forest green","green"))
+#
+syn.obs = quantileSynthesis(
+      draws_list = list(M5$samp.post.pred, M50$samp.post.pred,
+                      + M95$samp.post.pred),
+        p = c(0.05, 0.50, 0.95),
+          T_expected = length(LakeHuron))
+# 
+## NOT WORKING
+n.samp = M5$n.mcmc
+q.fore = sweep(matrix(rnorm(8 * n.samp), 8, n.samp), 1,
+               sqrt(fc05$fQ), "*") + fc05$ff
+future.M5$ydraw = vapply(1:n.samp, function(j)
+  rexal(8, p0 = M5$p0, mu = q.fore[, j],
+          sigma = sigma.draws[j], gamma = gamma.draws[j]),
+              numeric(8))
 
 #####################
 ##### example 2 #####
@@ -68,11 +92,11 @@ model = trend.comp + seas.comp
 #
 model$GG
 #
-M1 = exdqlmLDVB(y = sunspot.year, p0 = 0.95, model = model,
+M1 = exdqlmLDVB(y = sunspot.year, p0 = 0.85, model = model,
                                      df = c(0.9,0.85), dim.df = c(1,8),
                                      dqlm.ind = TRUE, fix.sigma = FALSE,
                                      verbose = FALSE)
-M2 = exdqlmLDVB(y = sunspot.year, p0 = 0.95, model = model,
+M2 = exdqlmLDVB(y = sunspot.year, p0 = 0.85, model = model,
                                      df = c(0.9,0.85), dim.df = c(1,8),
                                      fix.sigma = FALSE, 
                                      verbose = FALSE)
@@ -90,24 +114,26 @@ hist(M2$samp.gamma,xlab=expression(gamma),main="")
 #
 # figure 4 (ex2checks.png)
 par(mfrow=c(2,3)) # not shown in article code chunk
-exdqlmDiagnostics(M1, M2, cols = c("red","blue"))
+d = exdqlmDiagnostics(M1, M2, cols = c("red","blue"))
+print(d)
 #
 possible.dfs = cbind(0.9,seq(0.85,1,0.05))
 possible.dfs
 #
-elbos <- vector("numeric")
-ref.samp = rnorm(length(sunspot.year))
+# elbos <- vector("numeric")
+crpss <- vector("numeric")
 for(i in 1:nrow(possible.dfs)){
      temp.M2 = exdqlmLDVB(y = sunspot.year, p0 = 0.85, model = model,
                                              df = possible.dfs[i,], dim.df = c(1,8),
                                              fix.sigma = FALSE, 
                                              verbose = FALSE)
-     # temp.check = exdqlmChecks(y = sunspot.year, temp.M2,
-     #                                        plot = FALSE, ref = ref.samp)
-     elbos = c(elbos,tail(temp.M2$diagnostics$elbo,n=1))
+     temp.d = exdqlmDiagnostics(temp.M2, plot = FALSE, ref = ref.samp)
+     #elbos = c(elbos,tail(temp.M2$diagnostics$elbo,n=1))
+     crpss = c(crpss,temp.d$m1.CRPS)
    }
 # optimal dfs based off elbo
-possible.dfs[which.max(elbos),]
+plot(possible.dfs[,2],crpss,type="l")
+possible.dfs[which.min(crpss),]
 
 
 #####################
@@ -126,8 +152,9 @@ model = trend.comp + seas.comp
 reg.comp = regMod(nino34, m0 = 1, C0 = 1)
 model.w.reg = model + reg.comp
 #
-possible.lams = seq(0.025,0.1,0.025)
-elbos <- vector("numeric")
+possible.lams = seq(0.975,0.99,0.005)
+KLs <- vector("numeric")
+crpss <- vector("numeric")
 for(i in 1:length(possible.lams)){
   temp.M2 = transfn_exdqlmLDVB(y = log(BTflow), p0 = 0.15, model = model,
                                df = c(1,0.9), dim.df = c(1,2),
@@ -135,13 +162,14 @@ for(i in 1:length(possible.lams)){
                                tf.m0 = c(0,0), tf.C0 = diag(c(0.1,0.005),2),
                                fix.sigma = FALSE,gam.init = -0.1,
                                tol = 0.05, verbose = FALSE)
-  # temp.check = exdqlmChecks(y = log(BTflow), temp.M2,
-  #                           plot = FALSE, ref = ref.samp)
-  elbos = c(elbos,tail(temp.M2$diagnostics$elbo,n=1))
+  temp.d = exdqlmDiagnostics(temp.M2, plot = FALSE)
+  KLs = c(KLs,temp.d$m1.KL)
+  crpss = c(crpss,temp.d$m1.CRPS)
 }
 # optimal lam based off KL divergence
-plot(possible.lams,elbos,type="l")
-possible.lams[which.max(elbos)]
+plot(possible.lams,crpss,type="l")
+plot(possible.lams,KLs,type="l")
+possible.lams[which.min(KLs)]
 #
 M1 = exdqlmLDVB(y = log(BTflow), p0 = 0.15, model = model.w.reg,
                 df = c(1,0.9,0.95), dim.df = c(1,2,1),
@@ -149,7 +177,7 @@ M1 = exdqlmLDVB(y = log(BTflow), p0 = 0.15, model = model.w.reg,
                 tol = 0.05, verbose = FALSE)
 M2 = transfn_exdqlmLDVB(y = log(BTflow), p0 = 0.15, model = model,
                         df = c(1,0.9), dim.df = c(1,2),
-                        X = nino34, tf.df = c(0.95), lam = 0.1,
+                        X = nino34, tf.df = c(0.95), lam = 0.985,
                         tf.m0 = c(0,0), tf.C0 = diag(c(0.1,0.005),2),
                         fix.sigma = FALSE,
                         tol = 0.05, verbose = FALSE)
