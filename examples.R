@@ -45,7 +45,7 @@ par(mar = c(5.1, 4.1, 2.1, 1))
 plot(M95); title("Dynamic quantiles")
 exdqlmPlot(M50, add = TRUE, col = "blue")
 exdqlmPlot(M5, add = TRUE, col = "forest green")
-legend("topright", lty = 1, col = c("purple","blue","forest green"),
+legend("topright", lty = 1, bty = "n", col = c("purple","blue","forest green"),
                   legend = c(expression('p'[0]*'=0.95'),expression('p'[0]*'=0.50'),
                                                  expression('p'[0]*'=0.05')))
 #
@@ -55,29 +55,25 @@ fGG =  model$GG
 plot(LakeHuron,  xlim = c(1952,1980), ylim = c(575.5,581.5),
                    col = "dark grey", main = "Forecasted quantiles",
                     ylab = "forecast 95% CrIs")
-exdqlmForecast(start.t = length(LakeHuron), k = 8, M95,
-                                 fFF = fFF, fGG = fGG, plot = TRUE, add = TRUE)
-exdqlmForecast(start.t = length(LakeHuron), k = 8, M50,
+fc95 = exdqlmForecast(start.t = length(LakeHuron), k = 8, m1 = M95,
                                  fFF = fFF, fGG = fGG, plot = TRUE, add = TRUE,
-                                 cols = c("blue","light blue"))
-exdqlmForecast(start.t = length(LakeHuron), k = 8, M5,
+                                  return.draws = TRUE)
+fc50 = exdqlmForecast(start.t = length(LakeHuron), k = 8, m1 = M50,
                                  fFF = fFF, fGG = fGG, plot = TRUE, add = TRUE,
-                                 cols = c("forest green","green"))
+                                 cols = c("blue","light blue"), return.draws = TRUE)
+fc05 = exdqlmForecast(start.t = length(LakeHuron), k = 8, m1 = M5,
+                                 fFF = fFF, fGG = fGG, plot = TRUE, add = TRUE,
+                                 cols = c("forest green","green"),return.draws = TRUE)
 #
 syn.obs = quantileSynthesis(
-      draws_list = list(M5$samp.post.pred, M50$samp.post.pred,
-                      + M95$samp.post.pred),
-        p = c(0.05, 0.50, 0.95),
-          T_expected = length(LakeHuron))
+            draws_list = list(M5, M50, M95),
+            p = c(0.05, 0.50, 0.95),
+            T_expected = length(LakeHuron))
 # 
-## NOT WORKING
-n.samp = M5$n.mcmc
-q.fore = sweep(matrix(rnorm(8 * n.samp), 8, n.samp), 1,
-               sqrt(fc05$fQ), "*") + fc05$ff
-future.M5$ydraw = vapply(1:n.samp, function(j)
-  rexal(8, p0 = M5$p0, mu = q.fore[, j],
-          sigma = sigma.draws[j], gamma = gamma.draws[j]),
-              numeric(8))
+syn.fore = quantileSynthesis(
+            draws_list = list(fc05, fc50, fc95),
+            p = c(0.05, 0.50, 0.95),
+            T_expected = 8)
 
 #####################
 ##### example 2 #####
@@ -95,45 +91,58 @@ model$GG
 M1 = exdqlmLDVB(y = sunspot.year, p0 = 0.85, model = model,
                                      df = c(0.9,0.85), dim.df = c(1,8),
                                      dqlm.ind = TRUE, fix.sigma = FALSE,
-                                     verbose = FALSE)
+                                     n.samp = 3000, verbose = FALSE)
 M2 = exdqlmLDVB(y = sunspot.year, p0 = 0.85, model = model,
                                      df = c(0.9,0.85), dim.df = c(1,8),
                                      fix.sigma = FALSE, 
-                                     verbose = FALSE)
+                                     n.samp = 3000, verbose = FALSE)
 #
 summary(M1)
 summary(M2)
 # figure 3 (ex2quant.png)
-par(mfcol=c(1,3)) # not shown in article code chunk
-plot(sunspot.year, col = "dark grey") # not shown in article code chunk
+# not shown in article code chunk
+par(mfcol=c(1,1)) 
+plot(sunspot.year, col = "dark grey", xlim = c(1710,1979)) 
+#
+par(mfcol=c(1,2)) # not shown in article code chunk
 plot(sunspot.year, xlim = c(1750,1850), col = "dark grey",
                ylab = "quantile 95% CrIs")
 exdqlmPlot(M1, add = TRUE, col = "red")
 exdqlmPlot(M2, add = TRUE, col = "blue")
-hist(M2$samp.gamma,xlab=expression(gamma),main="")
+legend("topleft", lty = 1, , bty = "n", col = c("red","blue"),legend = c("DQLM","exDQLM"))
+#
+hist(M2$samp.gamma, xlab=expression(gamma), main="")
+abline(v = mean(M2$samp.gamma), col="blue")
 #
 # figure 4 (ex2checks.png)
 par(mfrow=c(2,3)) # not shown in article code chunk
-d = exdqlmDiagnostics(M1, M2, cols = c("red","blue"))
-print(d)
+diagM1M2 = exdqlmDiagnostics(M1, M2, cols = c("red","blue"))
+print(diagM1M2)
 #
 possible.dfs = cbind(0.9,seq(0.85,1,0.05))
 possible.dfs
 #
-# elbos <- vector("numeric")
-crpss <- vector("numeric")
+metrics <- matrix(NA_real_, nrow(possible.dfs), 2,
+                  dimnames = list(NULL, c("CRPS","KL")))
+ref.samp = rnorm(length(sunspot.year))
 for(i in 1:nrow(possible.dfs)){
      temp.M2 = exdqlmLDVB(y = sunspot.year, p0 = 0.85, model = model,
                                              df = possible.dfs[i,], dim.df = c(1,8),
-                                             fix.sigma = FALSE, 
-                                             verbose = FALSE)
-     temp.d = exdqlmDiagnostics(temp.M2, plot = FALSE, ref = ref.samp)
-     #elbos = c(elbos,tail(temp.M2$diagnostics$elbo,n=1))
-     crpss = c(crpss,temp.d$m1.CRPS)
+                                             sig.init = 2, fix.sigma = FALSE, 
+                                             n.samp = 3000, verbose = FALSE)
+     temp.check = exdqlmDiagnostics(temp.M2, plot = FALSE, ref = ref.samp)
+     metrics[i,] = c(temp.check$m1.CRPS, temp.check$m1.KL)
    }
-# optimal dfs based off elbo
-plot(possible.dfs[,2],crpss,type="l")
+# optimal dfs based off CRPS
 possible.dfs[which.min(crpss),]
+#
+M1mcmc = exdqlmMCMC(y = sunspot.year, p0 = 0.85, model = model,
+                df = c(0.9,0.85), dim.df = c(1,8),
+                n.burn = 2000, n.mcmc = 3000, verbose = FALSE,
+                dqlm.ind = TRUE,)
+M2mcmc = exdqlmMCMC(y = sunspot.year, p0 = 0.85, model = model,
+                df = c(0.9,0.85), dim.df = c(1,8),
+                n.burn = 2000, n.mcmc = 3000, verbose = FALSE)
 
 
 #####################
